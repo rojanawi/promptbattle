@@ -35,9 +35,28 @@ function App() {
   }
 
   useEffect(() => {
-    // Initialize PeerJS with debug logging
+    // Initialize PeerJS with enhanced configuration for mobile networks
     const peer = new Peer({
-      debug: 3 // 0 = no logging, 1 = errors only, 2 = errors + warnings, 3 = all logs
+      debug: 3,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+          // Add TURN servers if you have them
+          // {
+          //   urls: 'turn:your-turn-server.com:3478',
+          //   username: 'username',
+          //   credential: 'credential'
+          // }
+        ]
+      },
+      // Increase timeout for mobile networks
+      timeout: 30000,
+      // Enable more aggressive ICE gathering
+      iceTransportPolicy: 'all'
     })
     peerRef.current = peer
 
@@ -50,6 +69,7 @@ function App() {
     // Handle incoming connections
     peer.on('connection', (conn) => {
       addLog(`Incoming connection from: ${conn.peer}`, 'success')
+      addLog(`Connection metadata: ${JSON.stringify(conn.metadata)}`)
       connectionRef.current = conn
       setRemotePeerId(conn.peer)
       setIsConnected(true)
@@ -71,12 +91,29 @@ function App() {
       // Handle connection errors
       conn.on('error', (err) => {
         addLog(`Connection error: ${err}`, 'error')
+        addLog(`Connection state: ${conn.peerConnection?.connectionState}`, 'error')
+        addLog(`ICE connection state: ${conn.peerConnection?.iceConnectionState}`, 'error')
+      })
+
+      // Monitor ICE connection state
+      conn.peerConnection?.addEventListener('iceconnectionstatechange', () => {
+        addLog(`ICE connection state changed to: ${conn.peerConnection?.iceConnectionState}`)
+      })
+
+      // Monitor connection state
+      conn.peerConnection?.addEventListener('connectionstatechange', () => {
+        addLog(`Connection state changed to: ${conn.peerConnection?.connectionState}`)
       })
     })
 
     // Handle peer errors
     peer.on('error', (err) => {
       addLog(`Peer error: ${err}`, 'error')
+      if (err.type === 'peer-unavailable') {
+        addLog('Peer is unavailable. They might be offline or behind a strict firewall.', 'error')
+      } else if (err.type === 'disconnected') {
+        addLog('Disconnected from signaling server. Attempting to reconnect...', 'error')
+      }
     })
 
     return () => {
@@ -89,11 +126,18 @@ function App() {
     if (!peerRef.current || !remotePeerId) return
 
     addLog(`Attempting to connect to: ${remotePeerId}`)
-    const conn = peerRef.current.connect(remotePeerId)
+    const conn = peerRef.current.connect(remotePeerId, {
+      metadata: {
+        platform: navigator.platform,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString()
+      }
+    })
     connectionRef.current = conn
 
     conn.on('open', () => {
       addLog('Connection opened', 'success')
+      addLog(`Connection metadata: ${JSON.stringify(conn.metadata)}`)
       setIsConnected(true)
     })
 
@@ -111,6 +155,18 @@ function App() {
 
     conn.on('error', (err) => {
       addLog(`Connection error: ${err}`, 'error')
+      addLog(`Connection state: ${conn.peerConnection?.connectionState}`, 'error')
+      addLog(`ICE connection state: ${conn.peerConnection?.iceConnectionState}`, 'error')
+    })
+
+    // Monitor ICE connection state
+    conn.peerConnection?.addEventListener('iceconnectionstatechange', () => {
+      addLog(`ICE connection state changed to: ${conn.peerConnection?.iceConnectionState}`)
+    })
+
+    // Monitor connection state
+    conn.peerConnection?.addEventListener('connectionstatechange', () => {
+      addLog(`Connection state changed to: ${conn.peerConnection?.connectionState}`)
     })
   }
 
