@@ -98,3 +98,58 @@ button:hover {
   margin-left: auto;
   max-width: 80%;
 }
+
+.logs-section {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.toggle-logs {
+  width: 100%;
+  padding: 0.5rem;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.toggle-logs:hover {
+  background-color: #e0e0e0;
+}
+
+.logs-container {
+  height: 200px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.5rem;
+  background-color: #f8f8f8;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.log-entry {
+  margin-bottom: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 2px;
+}
+
+.log-entry.error {
+  color: #dc3545;
+  background-color: #ffe6e6;
+}
+
+.log-entry.success {
+  color: #28a745;
+  background-color: #e6ffe6;
+}
+
+.log-entry .timestamp {
+  color: #666;
+  margin-right: 0.5rem;
+}
+
+.log-entry .message {
+  word-break: break-all;
+}
