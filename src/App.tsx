@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import Peer from 'peerjs'
+import Peer, { DataConnection } from 'peerjs'
 import './App.css'
 
 interface Message {
@@ -22,7 +22,7 @@ function App() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [showLogs, setShowLogs] = useState(false)
   const peerRef = useRef<Peer | null>(null)
-  const connectionRef = useRef<Peer.DataConnection | null>(null)
+  const connectionRef = useRef<DataConnection | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
 
   const addLog = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
@@ -45,18 +45,21 @@ function App() {
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
           { urls: 'stun:stun4.l.google.com:19302' },
-          // Add TURN servers if you have them
-          // {
-          //   urls: 'turn:your-turn-server.com:3478',
-          //   username: 'username',
-          //   credential: 'credential'
-          // }
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'stun:openrelay.metered.ca:80'
+          }
         ]
-      },
-      // Increase timeout for mobile networks
-      timeout: 30000,
-      // Enable more aggressive ICE gathering
-      iceTransportPolicy: 'all'
+      }
     })
     peerRef.current = peer
 
