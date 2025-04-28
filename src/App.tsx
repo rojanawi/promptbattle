@@ -4,6 +4,7 @@ import './App.css'
 
 interface Message {
   text: string
+  senderId: string
   isMine: boolean
 }
 
@@ -13,16 +14,20 @@ interface LogEntry {
   type: 'info' | 'error' | 'success'
 }
 
+interface Connection {
+  id: string
+  connection: DataConnection
+}
+
 function App() {
   const [peerId, setPeerId] = useState<string>('')
   const [remotePeerId, setRemotePeerId] = useState<string>('')
   const [messages, setMessages] = useState<Message[]>([])
   const [message, setMessage] = useState('')
-  const [isConnected, setIsConnected] = useState(false)
+  const [connections, setConnections] = useState<Connection[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [showLogs, setShowLogs] = useState(false)
   const peerRef = useRef<Peer | null>(null)
-  const connectionRef = useRef<DataConnection | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
 
   // Get peerId from URL parameters
@@ -37,11 +42,11 @@ function App() {
 
   // Auto-connect when both peer IDs are available
   useEffect(() => {
-    if (peerId && remotePeerId && !isConnected) {
+    if (peerId && remotePeerId) {
       addLog('Auto-connecting to peer from URL...')
       connectToPeer()
     }
-  }, [peerId, remotePeerId, isConnected])
+  }, [peerId, remotePeerId])
 
   const addLog = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
     const timestamp = new Date().toLocaleTimeString()
@@ -91,39 +96,26 @@ function App() {
     peer.on('connection', (conn) => {
       addLog(`Incoming connection from: ${conn.peer}`, 'success')
       addLog(`Connection metadata: ${JSON.stringify(conn.metadata)}`)
-      connectionRef.current = conn
-      setRemotePeerId(conn.peer)
-      setIsConnected(true)
+      
+      // Add new connection to list
+      setConnections(prev => [...prev, { id: conn.peer, connection: conn }])
 
-      // Handle incoming messages
       conn.on('data', (data) => {
-        addLog(`Received message: ${data}`)
-        setMessages(prev => [...prev, { text: data as string, isMine: false }])
+        addLog(`Received message from ${conn.peer}: ${data}`)
+        setMessages(prev => [...prev, { 
+          text: data as string, 
+          senderId: conn.peer,
+          isMine: false 
+        }])
       })
 
-      // Handle connection close
       conn.on('close', () => {
-        addLog('Connection closed')
-        setIsConnected(false)
-        connectionRef.current = null
-        setRemotePeerId('')
+        addLog(`Connection closed with ${conn.peer}`)
+        setConnections(prev => prev.filter(c => c.id !== conn.peer))
       })
 
-      // Handle connection errors
       conn.on('error', (err) => {
-        addLog(`Connection error: ${err}`, 'error')
-        addLog(`Connection state: ${conn.peerConnection?.connectionState}`, 'error')
-        addLog(`ICE connection state: ${conn.peerConnection?.iceConnectionState}`, 'error')
-      })
-
-      // Monitor ICE connection state
-      conn.peerConnection?.addEventListener('iceconnectionstatechange', () => {
-        addLog(`ICE connection state changed to: ${conn.peerConnection?.iceConnectionState}`)
-      })
-
-      // Monitor connection state
-      conn.peerConnection?.addEventListener('connectionstatechange', () => {
-        addLog(`Connection state changed to: ${conn.peerConnection?.connectionState}`)
+        addLog(`Connection error with ${conn.peer}: ${err}`, 'error')
       })
     })
 
@@ -154,49 +146,45 @@ function App() {
         timestamp: new Date().toISOString()
       }
     })
-    connectionRef.current = conn
 
     conn.on('open', () => {
       addLog('Connection opened', 'success')
       addLog(`Connection metadata: ${JSON.stringify(conn.metadata)}`)
-      setIsConnected(true)
+      setConnections(prev => [...prev, { id: conn.peer, connection: conn }])
     })
 
     conn.on('data', (data) => {
-      addLog(`Received message: ${data}`)
-      setMessages(prev => [...prev, { text: data as string, isMine: false }])
+      addLog(`Received message from ${conn.peer}: ${data}`)
+      setMessages(prev => [...prev, { 
+        text: data as string, 
+        senderId: conn.peer,
+        isMine: false 
+      }])
     })
 
     conn.on('close', () => {
-      addLog('Connection closed')
-      setIsConnected(false)
-      connectionRef.current = null
-      setRemotePeerId('')
+      addLog(`Connection closed with ${conn.peer}`)
+      setConnections(prev => prev.filter(c => c.id !== conn.peer))
     })
 
     conn.on('error', (err) => {
-      addLog(`Connection error: ${err}`, 'error')
-      addLog(`Connection state: ${conn.peerConnection?.connectionState}`, 'error')
-      addLog(`ICE connection state: ${conn.peerConnection?.iceConnectionState}`, 'error')
-    })
-
-    // Monitor ICE connection state
-    conn.peerConnection?.addEventListener('iceconnectionstatechange', () => {
-      addLog(`ICE connection state changed to: ${conn.peerConnection?.iceConnectionState}`)
-    })
-
-    // Monitor connection state
-    conn.peerConnection?.addEventListener('connectionstatechange', () => {
-      addLog(`Connection state changed to: ${conn.peerConnection?.connectionState}`)
+      addLog(`Connection error with ${conn.peer}: ${err}`, 'error')
     })
   }
 
   const sendMessage = () => {
-    if (!connectionRef.current || !message.trim()) return
+    if (!message.trim()) return
 
-    addLog(`Sending message: ${message}`)
-    connectionRef.current.send(message)
-    setMessages(prev => [...prev, { text: message, isMine: true }])
+    // Send message to all connected peers
+    connections.forEach(({ connection }) => {
+      addLog(`Sending message to ${connection.peer}: ${message}`)
+      connection.send(message)
+      setMessages(prev => [...prev, { 
+        text: message, 
+        senderId: peerId,
+        isMine: true 
+      }])
+    })
     setMessage('')
   }
 
@@ -206,19 +194,40 @@ function App() {
       <div className="peer-id-container">
         <p>Your ID: {peerId}</p>
         {peerId && (
-          <button 
-            className="copy-button"
-            onClick={() => {
-              navigator.clipboard.writeText(peerId)
-              addLog('ID copied to clipboard', 'success')
-            }}
-          >
-            Copy ID
-          </button>
+          <>
+            <button 
+              className="copy-button"
+              onClick={() => {
+                navigator.clipboard.writeText(peerId)
+                addLog('ID copied to clipboard', 'success')
+              }}
+            >
+              Copy ID
+            </button>
+            <button 
+              className="copy-button"
+              onClick={() => {
+                const url = `${window.location.origin}${window.location.pathname}?peerId=${peerId}`
+                navigator.clipboard.writeText(url)
+                addLog('Share link copied to clipboard', 'success')
+              }}
+            >
+              Copy Link
+            </button>
+          </>
         )}
       </div>
       
-      {!isConnected ? (
+      <div className="connections-list">
+        <h3>Connected Peers ({connections.length})</h3>
+        {connections.map(({ id }) => (
+          <div key={id} className="connection-item">
+            {id}
+          </div>
+        ))}
+      </div>
+
+      {!connections.length ? (
         <div className="input-group">
           <input
             type="text"
@@ -229,18 +238,19 @@ function App() {
           <button onClick={connectToPeer}>Connect</button>
         </div>
       ) : (
-        <p>Connected to {remotePeerId}</p>
+        <div className="messages">
+          {messages.map((msg, index) => (
+            <div key={index} className={`message ${msg.isMine ? 'my-message' : ''}`}>
+              <div className="message-sender">
+                {msg.isMine ? 'You' : `Peer ${msg.senderId.slice(0, 6)}...`}
+              </div>
+              <div className="message-content">{msg.text}</div>
+            </div>
+          ))}
+        </div>
       )}
 
-      <div className="messages">
-        {messages.map((msg, index) => (
-          <div key={index} className={`message ${msg.isMine ? 'my-message' : ''}`}>
-            {msg.text}
-          </div>
-        ))}
-      </div>
-
-      {isConnected && (
+      {connections.length > 0 && (
         <div className="input-group">
           <input
             type="text"
