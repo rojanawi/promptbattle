@@ -25,6 +25,24 @@ function App() {
   const connectionRef = useRef<DataConnection | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
 
+  // Get peerId from URL parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const initialPeerId = urlParams.get('peerId')
+    if (initialPeerId) {
+      setRemotePeerId(initialPeerId)
+      addLog(`Found peer ID in URL: ${initialPeerId}`)
+    }
+  }, [])
+
+  // Auto-connect when both peer IDs are available
+  useEffect(() => {
+    if (peerId && remotePeerId && !isConnected) {
+      addLog('Auto-connecting to peer from URL...')
+      connectToPeer()
+    }
+  }, [peerId, remotePeerId, isConnected])
+
   const addLog = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
     const timestamp = new Date().toLocaleTimeString()
     setLogs(prev => [...prev, { timestamp, message, type }])
@@ -185,7 +203,20 @@ function App() {
   return (
     <div className="chat-container">
       <h1>PeerJS Chat</h1>
-      <p>Your ID: {peerId}</p>
+      <div className="peer-id-container">
+        <p>Your ID: {peerId}</p>
+        {peerId && (
+          <button 
+            className="copy-button"
+            onClick={() => {
+              navigator.clipboard.writeText(peerId)
+              addLog('ID copied to clipboard', 'success')
+            }}
+          >
+            Copy ID
+          </button>
+        )}
+      </div>
       
       {!isConnected ? (
         <div className="input-group">

@@ -153,3 +153,20 @@ button:hover {
 .log-entry .message {
   word-break: break-all;
 }
+
+.peer-id-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.copy-button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
+  background-color: #4CAF50;
+}
+
+.copy-button:hover {
+  background-color: #45a049;
+}
