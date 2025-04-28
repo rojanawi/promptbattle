@@ -25,28 +25,31 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [message, setMessage] = useState('')
   const [connections, setConnections] = useState<Connection[]>([])
+  const [isConnecting, setIsConnecting] = useState(false)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [showLogs, setShowLogs] = useState(false)
   const peerRef = useRef<Peer | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
+  const initialPeerIdRef = useRef<string | null>(null)
 
   // Get peerId from URL parameters
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const initialPeerId = urlParams.get('peerId')
     if (initialPeerId) {
+      initialPeerIdRef.current = initialPeerId
       setRemotePeerId(initialPeerId)
       addLog(`Found peer ID in URL: ${initialPeerId}`)
     }
   }, [])
 
-  // Auto-connect when both peer IDs are available
+  // Auto-connect only when coming from URL
   useEffect(() => {
-    if (peerId && remotePeerId) {
+    if (peerId && initialPeerIdRef.current && !connections.length) {
       addLog('Auto-connecting to peer from URL...')
       connectToPeer()
     }
-  }, [peerId, remotePeerId])
+  }, [peerId, connections.length])
 
   const addLog = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
     const timestamp = new Date().toLocaleTimeString()
@@ -138,6 +141,7 @@ function App() {
   const connectToPeer = () => {
     if (!peerRef.current || !remotePeerId) return
 
+    setIsConnecting(true)
     addLog(`Attempting to connect to: ${remotePeerId}`)
     const conn = peerRef.current.connect(remotePeerId, {
       metadata: {
@@ -151,6 +155,7 @@ function App() {
       addLog('Connection opened', 'success')
       addLog(`Connection metadata: ${JSON.stringify(conn.metadata)}`)
       setConnections(prev => [...prev, { id: conn.peer, connection: conn }])
+      setIsConnecting(false)
     })
 
     conn.on('data', (data) => {
@@ -165,10 +170,12 @@ function App() {
     conn.on('close', () => {
       addLog(`Connection closed with ${conn.peer}`)
       setConnections(prev => prev.filter(c => c.id !== conn.peer))
+      setIsConnecting(false)
     })
 
     conn.on('error', (err) => {
       addLog(`Connection error with ${conn.peer}: ${err}`, 'error')
+      setIsConnecting(false)
     })
   }
 
@@ -234,8 +241,15 @@ function App() {
             value={remotePeerId}
             onChange={(e) => setRemotePeerId(e.target.value)}
             placeholder="Enter peer ID to connect"
+            disabled={isConnecting}
           />
-          <button onClick={connectToPeer}>Connect</button>
+          <button 
+            onClick={connectToPeer}
+            disabled={isConnecting || !remotePeerId}
+            className={isConnecting ? 'connecting' : ''}
+          >
+            {isConnecting ? 'Connecting...' : 'Connect'}
+          </button>
         </div>
       ) : (
         <div className="messages">

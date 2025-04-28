@@ -76,6 +76,16 @@ button:hover {
   background-color: #535bf2;
 }
 
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+button.connecting {
+  background-color: #ff9800;
+  cursor: wait;
+}
+
 .messages {
   height: 300px;
   overflow-y: auto;
@@ -90,17 +100,23 @@ button:hover {
   padding: 0.75rem;
   border-radius: 4px;
   background-color: #f0f0f0;
+  color: #333;
 }
 
 .message.my-message {
   background-color: #e3f2fd;
   margin-left: 2rem;
+  color: #000;
 }
 
 .message-sender {
   font-size: 0.8rem;
   color: #666;
   margin-bottom: 0.25rem;
+}
+
+.message.my-message .message-sender {
+  color: #1976d2;
 }
 
 .message-content {
