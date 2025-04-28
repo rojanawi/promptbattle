@@ -11,7 +11,6 @@ import {
   Radio,
   RadioGroup,
   Stack,
-  Text,
   useToast,
   VStack,
 } from '@chakra-ui/react';

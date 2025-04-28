@@ -1,4 +1,4 @@
-import { Box, Button, Container, Heading, HStack, Text, VStack } from '@chakra-ui/react';
+import { Button, Container, Heading, HStack, Text, VStack } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 
 const HomePage = () => {

@@ -33,9 +33,7 @@ const BattlePage = () => {
     error,
     startNewRound,
     submitPrompt,
-    generateImage,
     submitVote,
-    sendMessage,
   } = useBattle({
     battleId,
     userId: userId || '',

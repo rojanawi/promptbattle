@@ -1,4 +1,4 @@
-import { ref, set, get, push, update, onValue, off, DatabaseReference } from 'firebase/database';
+import { ref, set, get, push, update, onValue, off } from 'firebase/database';
 import { database } from '../config/firebase';
 import type {
   Battle,
@@ -9,8 +9,6 @@ import type {
   Submission,
   Vote,
   Message,
-  User,
-  ActiveBattle,
 } from '../types/battle';
 
 // Battle Operations
