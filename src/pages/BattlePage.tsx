@@ -12,6 +12,8 @@ import {
   Text,
   useToast,
   VStack,
+  Input,
+  HStack,
 } from '@chakra-ui/react';
 import { useAuth } from '../hooks/useAuth';
 import { useBattle } from '../hooks/useBattle';
@@ -22,7 +24,6 @@ const BattlePage = () => {
   const { userId, displayName } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const [apiKey, setApiKey] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
 
   // Get the battle data
@@ -37,7 +38,6 @@ const BattlePage = () => {
   } = useBattle({
     battleId,
     userId: userId || '',
-    apiKey: apiKey || undefined,
     isHost,
   });
 
@@ -51,15 +51,7 @@ const BattlePage = () => {
     if (battle) {
       setIsHost(battle.metadata.hostId === userId);
     }
-
-    // If user is host, get API key from localStorage
-    if (isHost) {
-      const storedApiKey = localStorage.getItem('openai_api_key');
-      if (storedApiKey) {
-        setApiKey(storedApiKey);
-      }
-    }
-  }, [userId, displayName, battle, isHost, navigate]);
+  }, [userId, displayName, battle, navigate]);
 
   if (loading) {
     return (
@@ -77,13 +69,13 @@ const BattlePage = () => {
     );
   }
 
-  const isContestant = battle.participants[userId || '']?.role === 'contestant';
-  const hasSubmittedPrompt = currentRound?.submissions[userId || '']?.prompt;
-  const hasVoted = currentRound?.votes[userId || '']?.votedFor;
+  const isContestant = battle?.participants?.[userId || '']?.role === 'contestant';
+  const hasSubmittedPrompt = currentRound?.submissions?.[userId || '']?.prompt;
+  const hasVoted = currentRound?.votes?.[userId || '']?.votedFor;
   const canVote =
     currentRound?.status === 'voting' &&
     !hasVoted &&
-    (isContestant || battle.metadata.settings.spectatorVotingEnabled);
+    (isContestant || battle?.metadata?.settings?.spectatorVotingEnabled);
 
   const handlePromptSubmit = async (prompt: string) => {
     if (!currentRound || !isContestant) return;
@@ -124,29 +116,6 @@ const BattlePage = () => {
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to submit vote',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const handleStartNewRound = async () => {
-    if (!isHost) return;
-
-    try {
-      await startNewRound();
-      toast({
-        title: 'Success',
-        description: 'New round started!',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to start new round',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -221,8 +190,14 @@ const BattlePage = () => {
               </Box>
             ))}
 
+            {isHost && !currentRound && (
+              <Button colorScheme="blue" onClick={startNewRound}>
+                Start Battle
+              </Button>
+            )}
+
             {isHost && currentRound?.status === 'completed' && (
-              <Button colorScheme="blue" onClick={handleStartNewRound}>
+              <Button colorScheme="blue" onClick={startNewRound}>
                 Start Next Round
               </Button>
             )}
