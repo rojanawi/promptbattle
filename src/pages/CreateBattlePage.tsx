@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -40,6 +40,11 @@ const CreateBattlePage = () => {
     customTopics: [],
   });
 
+  useEffect(() => {
+    const storedKey = localStorage.getItem('openai_api_key');
+    if (storedKey) setApiKey(storedKey);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -54,7 +59,7 @@ const CreateBattlePage = () => {
       return;
     }
 
-    if (!name.trim() || !description.trim() || !apiKey.trim()) {
+    if (!apiKey.trim()) {
       toast({
         title: 'Error',
         description: 'Please fill in all required fields',
@@ -69,6 +74,9 @@ const CreateBattlePage = () => {
       // Test OpenAI API key
       const openai = new OpenAIService(apiKey);
       await openai.generateTopic();
+
+      // Save API key to local storage
+      localStorage.setItem('openai_api_key', apiKey);
 
       const battleId = await firebaseService.createBattle(
         userId,
@@ -107,7 +115,7 @@ const CreateBattlePage = () => {
         
         <Box as="form" onSubmit={handleSubmit}>
           <Stack spacing={6}>
-            <FormControl isRequired>
+            <FormControl>
               <FormLabel>Battle Name</FormLabel>
               <Input
                 value={name}
@@ -116,7 +124,7 @@ const CreateBattlePage = () => {
               />
             </FormControl>
 
-            <FormControl isRequired>
+            <FormControl>
               <FormLabel>Description</FormLabel>
               <Input
                 value={description}
@@ -230,4 +238,4 @@ const CreateBattlePage = () => {
   );
 };
 
-export default CreateBattlePage; 
+export default CreateBattlePage;

@@ -12,8 +12,6 @@ import {
   Text,
   useToast,
   VStack,
-  Input,
-  HStack,
 } from '@chakra-ui/react';
 import { useAuth } from '../hooks/useAuth';
 import { useBattle } from '../hooks/useBattle';
@@ -25,6 +23,7 @@ const BattlePage = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const [isHost, setIsHost] = useState(false);
+  const [apiKey, setApiKey] = useState<string | undefined>(undefined);
 
   // Get the battle data
   const {
@@ -39,6 +38,7 @@ const BattlePage = () => {
     battleId,
     userId: userId || '',
     isHost,
+    apiKey,
   });
 
   useEffect(() => {
@@ -46,12 +46,20 @@ const BattlePage = () => {
       navigate('/');
       return;
     }
+  }, [userId, displayName, navigate]);
 
-    // Update host status when battle data is available
-    if (battle) {
-      setIsHost(battle.metadata.hostId === userId);
+  useEffect(() => {
+    if (battle && userId) {
+      const host = battle.metadata.hostId === userId;
+      setIsHost(host);
+      if (host) {
+        const storedKey = localStorage.getItem('openai_api_key');
+        setApiKey(storedKey || undefined);
+      } else {
+        setApiKey(undefined);
+      }
     }
-  }, [userId, displayName, battle, navigate]);
+  }, [battle, userId]);
 
   if (loading) {
     return (
@@ -124,7 +132,15 @@ const BattlePage = () => {
   };
 
   return (
-    <Container maxW="container.xl" py={10}>
+    <Container maxW="container.lg" py={8}>
+      {battle && (
+        <Box mb={8} textAlign="center">
+          <Heading size="2xl" color="blue.500">
+            Join Code: {battle.metadata.battleCode}
+          </Heading>
+        </Box>
+      )}
+
       <Grid templateColumns="repeat(12, 1fr)" gap={6}>
         {/* Battle Info */}
         <GridItem colSpan={12}>
@@ -306,4 +322,4 @@ const RoundResults = ({ round, battle }: RoundResultsProps) => {
   );
 };
 
-export default BattlePage; 
+export default BattlePage;
