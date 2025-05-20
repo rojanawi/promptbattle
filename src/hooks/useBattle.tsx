@@ -29,8 +29,21 @@ export const useBattle = ({ battleId, userId, isHost, apiKey }: UseBattleProps) 
       
       // Update current round
       const rounds = Object.values(updatedBattle.rounds || {});
-      const activeRound = rounds.find(r => r.status !== 'completed');
-      setCurrentRound(activeRound || null);
+      if (rounds.length > 0) {
+        // First try to find an active round
+        const activeRound = rounds.find(r => r.status !== 'completed');
+        if (activeRound) {
+          setCurrentRound(activeRound);
+        } else {
+          // If no active round, get the most recent completed round
+          const lastRound = rounds.reduce((latest, current) => 
+            current.roundNumber > latest.roundNumber ? current : latest
+          );
+          setCurrentRound(lastRound);
+        }
+      } else {
+        setCurrentRound(null);
+      }
       
       setLoading(false);
     });
@@ -44,9 +57,12 @@ export const useBattle = ({ battleId, userId, isHost, apiKey }: UseBattleProps) 
     }
 
     try {
-      const roundNumber = Object.keys(battle?.rounds || {}).length + 1;
+      // Calculate the next round number based on existing rounds
+      const roundNumbers = Object.keys(battle?.rounds || {}).map(Number);
+      const nextRoundNumber = roundNumbers.length > 0 ? Math.max(...roundNumbers) + 1 : 1;
+      
       const topic = await openai.generateTopic();
-      await firebaseService.startRound(battleId, roundNumber, topic);
+      await firebaseService.startRound(battleId, nextRoundNumber, topic);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start round');
       throw err;

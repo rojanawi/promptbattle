@@ -173,6 +173,54 @@ export const sendMessage = async (
   await push(ref(database, `battles/${battleId}/messages`), message);
 };
 
+export const updateRoundStatus = async (
+  battleId: string,
+  roundNumber: number,
+  status: 'prompt_submission' | 'voting' | 'completed'
+): Promise<void> => {
+  const roundRef = ref(database, `battles/${battleId}/rounds/${roundNumber}`);
+  const roundSnapshot = await get(roundRef);
+  const round = roundSnapshot.val();
+
+  if (!round) {
+    throw new Error('Round not found');
+  }
+
+  const updates: Partial<Round> = {
+    status,
+    ...(status === 'voting' ? { 
+      votingStartedAt: Date.now(),
+      votingEndTime: Date.now() + (round.promptEndTime - round.startedAt), // Same duration as prompt phase
+      votes: round.votes || {} // Initialize votes object if it doesn't exist
+    } : {}),
+    ...(status === 'completed' ? { endedAt: Date.now() } : {}),
+  };
+
+  await update(roundRef, updates);
+};
+
+export const updateRoundResults = async (
+  battleId: string,
+  roundNumber: number,
+  results: { winner: string; declaredAt: number }
+): Promise<void> => {
+  await update(ref(database, `battles/${battleId}/rounds/${roundNumber}`), {
+    results,
+  });
+
+  // Update the winner's score
+  const battleRef = ref(database, `battles/${battleId}`);
+  const battleSnapshot = await get(battleRef);
+  const battle = battleSnapshot.val();
+  
+  if (battle?.participants?.[results.winner]) {
+    const currentScore = battle.participants[results.winner].score || 0;
+    await update(ref(database, `battles/${battleId}/participants/${results.winner}`), {
+      score: currentScore + 1,
+    });
+  }
+};
+
 // Subscriptions
 export const subscribeToBattle = (
   battleId: string,

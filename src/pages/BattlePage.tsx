@@ -15,7 +15,8 @@ import {
 } from '@chakra-ui/react';
 import { useAuth } from '../hooks/useAuth';
 import { useBattle } from '../hooks/useBattle';
-import type { Submission } from '../types/battle';
+import * as firebaseService from '../services/firebase';
+import type { Submission, Round, Battle } from '../types/battle';
 
 const BattlePage = () => {
   const { battleId = '' } = useParams();
@@ -40,6 +41,18 @@ const BattlePage = () => {
     isHost,
     apiKey,
   });
+
+  // Add debug logging for round status changes
+  useEffect(() => {
+    if (currentRound) {
+      console.log('Round status changed:', {
+        status: currentRound.status,
+        roundNumber: currentRound.roundNumber,
+        submissions: currentRound.submissions,
+        votes: currentRound.votes
+      });
+    }
+  }, [currentRound]);
 
   useEffect(() => {
     if (!userId || !displayName) {
@@ -131,6 +144,60 @@ const BattlePage = () => {
     }
   };
 
+  const handleStartVoting = async () => {
+    if (!currentRound || !isHost) return;
+
+    try {
+      console.log('Starting voting phase...', { roundNumber: currentRound.roundNumber });
+      await firebaseService.updateRoundStatus(battleId, currentRound.roundNumber, 'voting');
+      console.log('Voting phase started successfully');
+      
+      toast({
+        title: 'Success',
+        description: 'Voting phase started!',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Failed to start voting phase:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to start voting phase',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleDeclareWinner = async (winnerId: string) => {
+    if (!currentRound || !isHost) return;
+
+    try {
+      await firebaseService.updateRoundResults(battleId, currentRound.roundNumber, {
+        winner: winnerId,
+        declaredAt: Date.now(),
+      });
+      await firebaseService.updateRoundStatus(battleId, currentRound.roundNumber, 'completed');
+      toast({
+        title: 'Success',
+        description: 'Winner declared!',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to declare winner',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   return (
     <Container maxW="container.lg" py={8}>
       {battle && (
@@ -148,12 +215,13 @@ const BattlePage = () => {
             <Heading>{battle.metadata.name}</Heading>
             <Text>{battle.metadata.description}</Text>
             <Text>
-              Round {currentRound?.roundNumber || 0} of {battle.metadata.settings.numRounds}
+              Round {currentRound?.roundNumber || 1} of {battle.metadata.settings.numRounds}
             </Text>
             {currentRound && (
               <Box p={4} bg="gray.100" borderRadius="md">
                 <Text fontWeight="bold">Topic:</Text>
                 <Text>{currentRound.topic}</Text>
+                <Text mt={2} fontWeight="bold">Status: {currentRound.status}</Text>
               </Box>
             )}
           </Stack>
@@ -166,22 +234,133 @@ const BattlePage = () => {
               <PromptSubmissionForm onSubmit={handlePromptSubmit} />
             )}
 
-            {currentRound?.status === 'voting' && (
-              <Grid templateColumns="repeat(2, 1fr)" gap={6}>
-                {Object.entries(currentRound.submissions).map(([submissionUserId, submission]) => (
-                  <SubmissionCard
-                    key={submissionUserId}
-                    submission={submission}
-                    displayName={battle.participants[submissionUserId]?.displayName}
-                    canVote={canVote && submissionUserId !== userId}
-                    onVote={() => handleVote(submissionUserId)}
-                  />
-                ))}
-              </Grid>
+            {currentRound?.status === 'prompt_submission' && isHost && currentRound.submissions && (
+              <Box>
+                <Heading size="md" mb={4}>Submitted Prompts</Heading>
+                <VStack spacing={4} align="stretch">
+                  {Object.entries(currentRound.submissions).map(([submissionUserId, submission]) => (
+                    <Box
+                      key={submissionUserId}
+                      p={4}
+                      bg="gray.50"
+                      borderRadius="md"
+                      borderWidth={1}
+                    >
+                      <Text fontWeight="bold">
+                        {battle.participants[submissionUserId]?.displayName}
+                      </Text>
+                      <Text mt={2}>{submission.prompt}</Text>
+                      <Text fontSize="sm" color="gray.500" mt={2}>
+                        Submitted at: {new Date(submission.submittedAt).toLocaleTimeString()}
+                      </Text>
+                    </Box>
+                  ))}
+                  {Object.keys(currentRound.submissions).length === 0 && (
+                    <Text color="gray.500">No prompts submitted yet...</Text>
+                  )}
+                  <Button
+                    colorScheme="blue"
+                    onClick={handleStartVoting}
+                    isDisabled={Object.keys(currentRound.submissions).length === 0}
+                  >
+                    Start Voting Phase
+                  </Button>
+                </VStack>
+              </Box>
             )}
 
-            {currentRound?.status === 'completed' && (
-              <RoundResults round={currentRound} battle={battle} />
+            {currentRound?.status === 'voting' && currentRound.submissions && (
+              <VStack spacing={6} align="stretch">
+                <Heading size="md">Voting Phase</Heading>
+                <Text color="gray.600" mb={4}>
+                  {canVote 
+                    ? "Vote for your favorite submission!"
+                    : hasVoted 
+                      ? "You have already voted"
+                      : "Voting is not available for your role"}
+                </Text>
+                {Object.keys(currentRound.submissions).length === 0 ? (
+                  <Text color="gray.500">No submissions to vote on...</Text>
+                ) : (
+                  <Grid templateColumns="repeat(2, 1fr)" gap={6}>
+                    {Object.entries(currentRound.submissions).map(([submissionUserId, submission]) => {
+                      // Count votes for this submission
+                      const voteCount = Object.values(currentRound.votes || {}).filter(
+                        vote => vote.votedFor === submissionUserId
+                      ).length;
+                      
+                      const hasVotedForThis = currentRound.votes?.[userId || '']?.votedFor === submissionUserId;
+                      
+                      return (
+                        <Box key={submissionUserId}>
+                          <SubmissionCard
+                            submission={submission}
+                            displayName={battle.participants[submissionUserId]?.displayName}
+                            canVote={canVote && submissionUserId !== userId}
+                            onVote={() => handleVote(submissionUserId)}
+                          />
+                          {isHost && (
+                            <VStack spacing={2} mt={2}>
+                              <Box p={2} bg="gray.50" borderRadius="md" width="100%">
+                                <Text fontWeight="bold" textAlign="center">
+                                  Votes: {voteCount}
+                                </Text>
+                              </Box>
+                              <Button
+                                colorScheme="green"
+                                onClick={() => handleDeclareWinner(submissionUserId)}
+                                width="100%"
+                              >
+                                Declare Winner
+                              </Button>
+                            </VStack>
+                          )}
+                          {!isHost && hasVotedForThis && (
+                            <Box mt={2} p={2} bg="green.50" borderRadius="md" textAlign="center">
+                              <Text color="green.600" fontWeight="bold">
+                                You voted for this submission
+                              </Text>
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Grid>
+                )}
+              </VStack>
+            )}
+
+            {currentRound?.status === 'completed' && currentRound.submissions && (
+              <VStack spacing={6} align="stretch">
+                <RoundResults round={currentRound} battle={battle} />
+                
+                {isHost && (
+                  <Box 
+                    p={6} 
+                    bg="blue.50" 
+                    borderRadius="lg" 
+                    borderWidth={1} 
+                    borderColor="blue.200"
+                    textAlign="center"
+                  >
+                    <Heading size="md" mb={4}>Round {currentRound.roundNumber} Completed!</Heading>
+                    <Text mb={4}>
+                      {currentRound.roundNumber < battle.metadata.settings.numRounds 
+                        ? `Ready to start round ${currentRound.roundNumber + 1}?`
+                        : 'This was the final round of the battle!'}
+                    </Text>
+                    {currentRound.roundNumber < battle.metadata.settings.numRounds && (
+                      <Button
+                        colorScheme="blue"
+                        size="lg"
+                        onClick={startNewRound}
+                      >
+                        Start Round {currentRound.roundNumber + 1}
+                      </Button>
+                    )}
+                  </Box>
+                )}
+              </VStack>
             )}
           </VStack>
         </GridItem>
@@ -213,8 +392,14 @@ const BattlePage = () => {
             )}
 
             {isHost && currentRound?.status === 'completed' && (
-              <Button colorScheme="blue" onClick={startNewRound}>
-                Start Next Round
+              <Button 
+                colorScheme="blue" 
+                onClick={startNewRound}
+                isDisabled={currentRound.roundNumber >= battle.metadata.settings.numRounds}
+              >
+                {currentRound.roundNumber >= battle.metadata.settings.numRounds 
+                  ? 'Battle Complete'
+                  : `Start Round ${currentRound.roundNumber + 1}`}
               </Button>
             )}
           </VStack>
@@ -280,12 +465,18 @@ const SubmissionCard = ({ submission, displayName, canVote, onVote }: Submission
     )}
     <Box p={4}>
       <Text fontWeight="bold">{displayName}</Text>
-      <Text fontSize="sm" color="gray.600">
+      <Text fontSize="sm" color="gray.600" mt={2}>
         {submission.prompt}
       </Text>
       {canVote && (
-        <Button mt={2} colorScheme="green" size="sm" onClick={onVote}>
-          Vote
+        <Button 
+          mt={4} 
+          colorScheme="green" 
+          size="sm" 
+          onClick={onVote}
+          width="100%"
+        >
+          Vote for this submission
         </Button>
       )}
     </Box>
@@ -293,19 +484,19 @@ const SubmissionCard = ({ submission, displayName, canVote, onVote }: Submission
 );
 
 interface RoundResultsProps {
-  round: any; // TODO: Add proper type
-  battle: any; // TODO: Add proper type
+  round: Round;
+  battle: Battle;
 }
 
 const RoundResults = ({ round, battle }: RoundResultsProps) => {
   const winner = round.results?.winner;
-  const winningSubmission = round.submissions[winner];
-  const winnerName = battle.participants[winner]?.displayName;
+  const winningSubmission = winner ? round.submissions[winner] : null;
+  const winnerName = winner ? battle.participants[winner]?.displayName : null;
 
   return (
     <VStack spacing={4} align="stretch">
       <Heading size="md">Round Results</Heading>
-      {winner && (
+      {winner && winningSubmission && winnerName && (
         <Box borderWidth={1} borderRadius="lg" p={4}>
           <Text fontWeight="bold">Winner: {winnerName}</Text>
           {winningSubmission.imageUrl && (
